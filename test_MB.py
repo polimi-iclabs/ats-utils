@@ -4,7 +4,7 @@ import fnv.reduce
 import fnv.file   
 
 # modules for math and plotting
-import numpy as np        
+import numpy as np
 from matplotlib import pyplot as plt  
 
 # modules for opening file
@@ -51,6 +51,76 @@ def get_timestamp(frame_info):
                                           microsecond=Microsecond)
             
             return TimeStamp
+        
+def read_ats_files(path, coords=None):
+    # open the file
+    im = fnv.file.ImagerFile(path)              # open the file
+
+    # correct metadata
+    # set desired units
+    if im.has_unit(fnv.Unit.TEMPERATURE_FACTORY):
+        # set units to temperature, if available
+        im.unit = fnv.Unit.TEMPERATURE_FACTORY
+        im.temp_type = fnv.TempType.KELVIN         # set temperature unit
+        # print('Temperature calibration found')
+    else:
+        # if file has no temperature calibration, use counts instead
+        im.unit = fnv.Unit.COUNTS
+        # print('No temperature calibration found')
+
+    #% object parameters
+    ObjParam=im.object_parameters
+    ObjParam.emissivity = 1
+    # ObjParam.atmospheric_transmission = 1
+    im.object_parameters = ObjParam
+
+    #% SUPERFRAMING
+    # What follows is just an example!
+    # Image data stored in a numpy 3D array (like a voxel) and TimeStamp stored in a numpy 1D array.
+    # TimeStamp equal to the number of seconds and microseconds elapsed since January 1 of the current year.
+    myArray_sf=np.zeros((im.num_frames//2+1, im.height, im.width))
+    TimeStamp = []
+    time_rel = np.zeros((im.num_frames//2+1)) 
+
+    im.get_superframe(0) 
+    if im.preset == 0:
+        start_idx = 0
+    else:
+        start_idx = 1
+
+    for ii in range(start_idx,im.num_frames,2): 
+        print("reading frame %d of %d" % (ii+1, im.num_frames), end='\r')
+        im.get_superframe(ii)
+        myArray_sf[ii//2]=np.array(im.final, copy=False).reshape((im.height, im.width))
+        TimeStamp.append(get_timestamp(im.frame_info))
+        time_rel[ii//2] = TimeStamp[ii//2].timestamp() - TimeStamp[0].timestamp()
+
+    # #%%
+    # plt.imshow(myArray_sf[10000], cmap='hot')
+    # plt.show()
+
+    #%
+    if coords is not None:
+        # extract the temperature at the coordinates
+        temp = np.zeros((coords.shape[0], myArray_sf.shape[0]))
+
+        for j in range(coords.shape[0]):
+            # take the average of 3x3 pixels around the coordinates
+            temp[j,:myArray_sf.shape[0]] = np.mean(myArray_sf[:, coords[j, 1]-1:coords[j, 1]+2, coords[j, 0]-1:coords[j, 0]+2], axis=(1, 2))
+
+            # plot the temperature
+            plt.plot(time_rel[:-1], temp[i,j,:len(time_rel)-1], label='%d' % (j))
+            
+        plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+        plt.xlabel('Time (s)')
+        plt.ylabel('Temperature (K)')
+        plt.title(path)
+        plt.show()
+    else:
+        temp = None
+    
+    return myArray_sf, TimeStamp, temp
+
 
 #%
 coords = np.array([[201, 167],
