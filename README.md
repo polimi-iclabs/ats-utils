@@ -1,4 +1,4 @@
-# ats-utils
+# ats-utils: Python utilities for FLIR ATS thermal video files
 
 Utilities for opening, reading, exporting, and visualizing thermal videos in FLIR ATS format.
 
@@ -75,9 +75,9 @@ You can still override individual config values for one run:
 python example_read_ats.py /path/to/video.ats \
   --export superframe \
   --emissivity 0.95 \
-  --reflected-temperature-k 293.15 \
-  --object-distance-m 1.0 \
-  --atmospheric-temperature-k 293.15 \
+  --reflected-temp-k 293.15 \
+  --distance-m 1.0 \
+  --atmosphere-temp-k 293.15 \
   --relative-humidity 0.50
 ```
 
@@ -148,29 +148,33 @@ The reusable config lives at `ats_temperature_basic/object_parameters.json`:
 
 ```json
 {
-  "emissivity": 1.0,
-  "reflected_temperature": null,
-  "object_distance": null,
-  "atmospheric_temperature": null,
-  "relative_humidity": null,
+  "atmosphere_temp": null,
   "atmospheric_transmission": null,
-  "external_optics_temperature": null,
-  "external_optics_transmission": null
+  "distance": null,
+  "emissivity": null,
+  "est_atmospheric_transmission": null,
+  "ext_optics_temp": null,
+  "ext_optics_transmission": null,
+  "reflected_temp": null,
+  "relative_humidity": null,
+  "source": null
 }
 ```
 
-Use `null` for optional values that should not be applied as explicit object-parameter updates.
+Use `null` for values that should not be applied as explicit object-parameter updates.
 
 | Reader name | Expected value | When to set it |
 | --- | --- | --- |
 | `emissivity` | Fraction from `0` to `1` | Set for every temperature read. Use `1.0` for blackbody-like calibrated data. |
-| `reflected_temperature` | Kelvin | Set when emissivity is below `1.0` or the surroundings differ from the target. |
-| `object_distance` | Meters | Set when the object-camera distance is known, especially for longer paths. |
-| `atmospheric_temperature` | Kelvin | Set when atmospheric compensation matters for the measurement setup. |
+| `reflected_temp` | Kelvin | Set when emissivity is below `1.0` or the surroundings differ from the target. |
+| `distance` | Meters | Set when the object-camera distance is known, especially for longer paths. |
+| `atmosphere_temp` | Kelvin | Set when atmospheric compensation matters for the measurement setup. |
 | `relative_humidity` | Fraction from `0` to `1` | Set when atmospheric compensation matters. Use `0.50` for 50%. |
 | `atmospheric_transmission` | Fraction from `0` to `1` | Set only when you want to override the SDK/camera transmission estimate. |
-| `external_optics_temperature` | Kelvin | Set when an external lens, IR window, or heat shield is in the optical path. |
-| `external_optics_transmission` | Fraction from `0` to `1` | Set when external optics are in the optical path. Use `1.0` when absent. |
+| `est_atmospheric_transmission` | Boolean | Set when you want the SDK to estimate atmospheric transmission. |
+| `ext_optics_temp` | Kelvin | Set when an external lens, IR window, or heat shield is in the optical path. |
+| `ext_optics_transmission` | Fraction from `0` to `1` | Set when external optics are in the optical path. Use `1.0` when absent. |
+| `source` | Value accepted by the FLIR SDK | Leave unset unless your camera setup requires an explicit source parameter. |
 
 Not every SDK build or file exposes every object-parameter attribute. If a name is unsupported, `apply_object_parameters()` raises an error listing the names exposed by the installed SDK for that file.
 
@@ -186,7 +190,7 @@ Not every SDK build or file exposes every object-parameter attribute. If a name 
 - `source_path`, `export_selection`, `read_mode`, `preset_gap_action`: provenance for the export.
 - `preset_gap_bounds`: ranges that can be masked for superframes.
 - `available_presets` and `preset_value_range_*`: observed preset metadata.
-- `object_parameter_names` and `object_parameter_values`: object parameters applied before reading.
+- `object_parameter_names` and `object_parameter_values_json`: object parameters applied before reading.
 - `emissivity`: kept as a convenience value for older scripts.
 
 Load an export like this:

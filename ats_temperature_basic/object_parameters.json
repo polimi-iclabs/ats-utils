@@ -1,10 +1,12 @@
 {
-  "emissivity": 1.0,
-  "reflected_temperature": null,
-  "object_distance": null,
-  "atmospheric_temperature": null,
-  "relative_humidity": null,
+  "atmosphere_temp": null,
   "atmospheric_transmission": null,
-  "external_optics_temperature": null,
-  "external_optics_transmission": null
+  "distance": null,
+  "emissivity": null,
+  "est_atmospheric_transmission": null,
+  "ext_optics_temp": null,
+  "ext_optics_transmission": null,
+  "reflected_temp": null,
+  "relative_humidity": null,
+  "source": null
 }

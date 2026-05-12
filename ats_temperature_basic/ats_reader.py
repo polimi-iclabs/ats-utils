@@ -27,13 +27,15 @@ class ATSObjectParameters:
     """
 
     emissivity: Optional[float] = 1.0
-    reflected_temperature: Optional[float] = None
-    object_distance: Optional[float] = None
-    atmospheric_temperature: Optional[float] = None
+    reflected_temp: Optional[float] = None
+    distance: Optional[float] = None
+    atmosphere_temp: Optional[float] = None
     relative_humidity: Optional[float] = None
     atmospheric_transmission: Optional[float] = None
-    external_optics_temperature: Optional[float] = None
-    external_optics_transmission: Optional[float] = None
+    est_atmospheric_transmission: Optional[bool] = None
+    ext_optics_temp: Optional[float] = None
+    ext_optics_transmission: Optional[float] = None
+    source: Optional[Any] = None
 
     def to_updates(self) -> Dict[str, Any]:
         return {
@@ -55,17 +57,17 @@ OBJECT_PARAMETER_DEFINITIONS: Tuple[ObjectParameterDefinition, ...] = (
         when_to_set="Set for every temperature read. Use 1.0 for blackbody-like calibrated data.",
     ),
     ObjectParameterDefinition(
-        name="reflected_temperature",
+        name="reflected_temp",
         expected_value="Kelvin",
         when_to_set="Set when emissivity is below 1.0 or the surroundings differ from the target.",
     ),
     ObjectParameterDefinition(
-        name="object_distance",
+        name="distance",
         expected_value="meters",
         when_to_set="Set when the object-camera distance is known, especially for longer paths.",
     ),
     ObjectParameterDefinition(
-        name="atmospheric_temperature",
+        name="atmosphere_temp",
         expected_value="Kelvin",
         when_to_set="Set when atmospheric compensation matters for the measurement setup.",
     ),
@@ -80,14 +82,24 @@ OBJECT_PARAMETER_DEFINITIONS: Tuple[ObjectParameterDefinition, ...] = (
         when_to_set="Set only when you want to override the SDK/camera transmission estimate.",
     ),
     ObjectParameterDefinition(
-        name="external_optics_temperature",
+        name="est_atmospheric_transmission",
+        expected_value="boolean",
+        when_to_set="Set when you want the SDK to estimate atmospheric transmission.",
+    ),
+    ObjectParameterDefinition(
+        name="ext_optics_temp",
         expected_value="Kelvin",
         when_to_set="Set when an external lens, IR window, or heat shield is in the optical path.",
     ),
     ObjectParameterDefinition(
-        name="external_optics_transmission",
+        name="ext_optics_transmission",
         expected_value="unitless fraction from 0 to 1",
         when_to_set="Set when external optics are in the optical path. Use 1.0 when absent.",
+    ),
+    ObjectParameterDefinition(
+        name="source",
+        expected_value="value accepted by the FLIR SDK",
+        when_to_set="Leave unset unless your camera setup requires an explicit source parameter.",
     ),
 )
 
@@ -142,13 +154,15 @@ def _validate_positive(parameter_name: str, value: Optional[float], unit: str) -
 def build_object_parameter_updates(
     *,
     emissivity: Optional[float] = 1.0,
-    reflected_temperature: Optional[float] = None,
-    object_distance: Optional[float] = None,
-    atmospheric_temperature: Optional[float] = None,
+    reflected_temp: Optional[float] = None,
+    distance: Optional[float] = None,
+    atmosphere_temp: Optional[float] = None,
     relative_humidity: Optional[float] = None,
     atmospheric_transmission: Optional[float] = None,
-    external_optics_temperature: Optional[float] = None,
-    external_optics_transmission: Optional[float] = None,
+    est_atmospheric_transmission: Optional[bool] = None,
+    ext_optics_temp: Optional[float] = None,
+    ext_optics_transmission: Optional[float] = None,
+    source: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Build the object-parameter mapping accepted by inspect_ats_file/read_ats_file.
 
@@ -160,21 +174,23 @@ def build_object_parameter_updates(
     _validate_fraction("emissivity", emissivity)
     _validate_fraction("relative_humidity", relative_humidity)
     _validate_fraction("atmospheric_transmission", atmospheric_transmission)
-    _validate_fraction("external_optics_transmission", external_optics_transmission)
-    _validate_positive("reflected_temperature", reflected_temperature, "Kelvin")
-    _validate_positive("object_distance", object_distance, "meters")
-    _validate_positive("atmospheric_temperature", atmospheric_temperature, "Kelvin")
-    _validate_positive("external_optics_temperature", external_optics_temperature, "Kelvin")
+    _validate_fraction("ext_optics_transmission", ext_optics_transmission)
+    _validate_positive("reflected_temp", reflected_temp, "Kelvin")
+    _validate_positive("distance", distance, "meters")
+    _validate_positive("atmosphere_temp", atmosphere_temp, "Kelvin")
+    _validate_positive("ext_optics_temp", ext_optics_temp, "Kelvin")
 
     return ATSObjectParameters(
         emissivity=emissivity,
-        reflected_temperature=reflected_temperature,
-        object_distance=object_distance,
-        atmospheric_temperature=atmospheric_temperature,
+        reflected_temp=reflected_temp,
+        distance=distance,
+        atmosphere_temp=atmosphere_temp,
         relative_humidity=relative_humidity,
         atmospheric_transmission=atmospheric_transmission,
-        external_optics_temperature=external_optics_temperature,
-        external_optics_transmission=external_optics_transmission,
+        est_atmospheric_transmission=est_atmospheric_transmission,
+        ext_optics_temp=ext_optics_temp,
+        ext_optics_transmission=ext_optics_transmission,
+        source=source,
     ).to_updates()
 
 
@@ -198,7 +214,7 @@ def build_object_parameter_updates_from_mapping(
         if parameter_name in object_parameter_values
     }
     if "emissivity" not in object_parameter_kwargs:
-        object_parameter_kwargs["emissivity"] = 1.0
+        object_parameter_kwargs["emissivity"] = None
 
     return build_object_parameter_updates(**object_parameter_kwargs)
 

@@ -18,9 +18,10 @@ Exported frames are saved by default in:
 """
 
 import argparse
+import json
 import sys
 from pathlib import Path
-from typing import Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 import numpy as np
 
@@ -63,22 +64,25 @@ def parse_args() -> argparse.Namespace:
         help="Override config emissivity with a 0..1 fraction.",
     )
     parser.add_argument(
-        "--reflected-temperature-k",
+        "--reflected-temp-k",
+        dest="reflected_temp_k",
         type=float,
         default=None,
-        help="Override config reflected apparent temperature in Kelvin.",
+        help="Override config reflected_temp in Kelvin.",
     )
     parser.add_argument(
-        "--object-distance-m",
+        "--distance-m",
+        dest="distance_m",
         type=float,
         default=None,
-        help="Override config camera-to-object distance in meters.",
+        help="Override config distance in meters.",
     )
     parser.add_argument(
-        "--atmospheric-temperature-k",
+        "--atmosphere-temp-k",
+        dest="atmosphere_temp_k",
         type=float,
         default=None,
-        help="Override config atmospheric temperature in Kelvin.",
+        help="Override config atmosphere_temp in Kelvin.",
     )
     parser.add_argument(
         "--relative-humidity",
@@ -93,16 +97,29 @@ def parse_args() -> argparse.Namespace:
         help="Override config atmospheric transmission as a 0..1 fraction.",
     )
     parser.add_argument(
-        "--external-optics-temperature-k",
-        type=float,
+        "--est-atmospheric-transmission",
+        choices=("true", "false"),
         default=None,
-        help="Override config external optics/window temperature in Kelvin.",
+        help="Override config est_atmospheric_transmission.",
     )
     parser.add_argument(
-        "--external-optics-transmission",
+        "--ext-optics-temp-k",
+        dest="ext_optics_temp_k",
         type=float,
         default=None,
-        help="Override config external optics/window transmission as a 0..1 fraction.",
+        help="Override config ext_optics_temp in Kelvin.",
+    )
+    parser.add_argument(
+        "--ext-optics-transmission",
+        dest="ext_optics_transmission",
+        type=float,
+        default=None,
+        help="Override config ext_optics_transmission as a 0..1 fraction.",
+    )
+    parser.add_argument(
+        "--source",
+        default=None,
+        help="Override config source with a value accepted by the FLIR SDK.",
     )
     parser.add_argument(
         "--object-parameters-config",
@@ -159,7 +176,7 @@ def print_ats_description(inspection, preset_gap_bounds: Sequence[tuple[float, f
             )
 
 
-def print_object_parameters(object_parameters: Mapping[str, float]) -> None:
+def print_object_parameters(object_parameters: Mapping[str, Any]) -> None:
     print("\nObject parameters applied before reading:")
     if not object_parameters:
         print("  none")
@@ -169,16 +186,23 @@ def print_object_parameters(object_parameters: Mapping[str, float]) -> None:
         print(f"  {parameter_name}: {object_parameters[parameter_name]}")
 
 
-def get_cli_object_parameter_overrides(args: argparse.Namespace) -> dict[str, float]:
+def get_cli_object_parameter_overrides(args: argparse.Namespace) -> dict[str, Any]:
+    if args.est_atmospheric_transmission is None:
+        est_atmospheric_transmission = None
+    else:
+        est_atmospheric_transmission = args.est_atmospheric_transmission == "true"
+
     possible_overrides = {
         "emissivity": args.emissivity,
-        "reflected_temperature": args.reflected_temperature_k,
-        "object_distance": args.object_distance_m,
-        "atmospheric_temperature": args.atmospheric_temperature_k,
+        "reflected_temp": args.reflected_temp_k,
+        "distance": args.distance_m,
+        "atmosphere_temp": args.atmosphere_temp_k,
         "relative_humidity": args.relative_humidity,
         "atmospheric_transmission": args.atmospheric_transmission,
-        "external_optics_temperature": args.external_optics_temperature_k,
-        "external_optics_transmission": args.external_optics_transmission,
+        "est_atmospheric_transmission": est_atmospheric_transmission,
+        "ext_optics_temp": args.ext_optics_temp_k,
+        "ext_optics_transmission": args.ext_optics_transmission,
+        "source": args.source,
     }
     return {
         parameter_name: parameter_value
@@ -335,7 +359,7 @@ def save_exported_frames(
     export_selection: str,
     preset_gap_action: str,
     preset_gap_bounds: Sequence[tuple[float, float, int, int, float, float]],
-    object_parameters: Mapping[str, float],
+    object_parameters: Mapping[str, Any],
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     label = export_label(export_selection, preset_gap_action)
@@ -352,9 +376,9 @@ def save_exported_frames(
     )
     object_parameter_keys = sorted(object_parameters)
     object_parameter_names = np.asarray(object_parameter_keys, dtype=str)
-    object_parameter_values = np.asarray(
-        [object_parameters[parameter_name] for parameter_name in object_parameter_keys],
-        dtype=float,
+    object_parameter_values_json = np.asarray(
+        [json.dumps(object_parameters[parameter_name]) for parameter_name in object_parameter_keys],
+        dtype=str,
     )
 
     np.savez_compressed(
@@ -374,7 +398,7 @@ def save_exported_frames(
         preset_value_range_min=preset_mins,
         preset_value_range_max=preset_maxs,
         object_parameter_names=object_parameter_names,
-        object_parameter_values=object_parameter_values,
+        object_parameter_values_json=object_parameter_values_json,
         emissivity=np.asarray(object_parameters.get("emissivity", np.nan), dtype=float),
     )
     return output_path
@@ -439,12 +463,10 @@ def main() -> None:
 
     object_parameters_config_path = args.object_parameters_config.expanduser()
     object_parameters = load_object_parameter_updates(object_parameters_config_path)
-    object_parameters = build_object_parameter_updates_from_mapping(
-        {
-            **object_parameters,
-            **get_cli_object_parameter_overrides(args),
-        }
+    object_parameter_overrides = build_object_parameter_updates_from_mapping(
+        get_cli_object_parameter_overrides(args)
     )
+    object_parameters = {**object_parameters, **object_parameter_overrides}
     print(f"\nObject parameter config: {object_parameters_config_path}")
     print_object_parameters(object_parameters)
     inspection = inspect_ats_file(str(ats_path), object_parameter_updates=object_parameters)
